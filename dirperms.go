@@ -4,15 +4,16 @@ import (
 	"fmt"
 	"os/exec"
 	"os/user"
+
 	"github.com/golang/glog"
 )
 
 const (
 	acluser = "user:%s:allow delete,readattr,writeattr,readextattr,writeextattr,readsecurity,writesecurity,chown,list,search,add_file,add_subdirectory,delete_child,read,write,execute,append,file_inherit,directory_inherit\neveryone:deny delete,readattr,writeattr,readextattr,writeextattr,readsecurity,writesecurity,chown,list,search,add_file,add_subdirectory,delete_child,read,write,execute,append,file_inherit,directory_inherit\n"
-	perms = "go-rwx"
+	perms   = "go-rwx"
 )
 
-func ChPrivateDir(path string, uid string) (err error) {
+func chprivDir(path string, uid string) (err error) {
 	// Ensure that the permissions are correct.
 	// -P: don't follow symlinks
 	// (Go's os.Chmod always follows symlinks)
@@ -33,23 +34,25 @@ func ChPrivateDir(path string, uid string) (err error) {
 	}
 	glog.Infof("chflags %s", string(out))
 
-	username, err := user.LookupId(uid)
+	u, err := user.LookupId(uid)
 	if err != nil {
 		glog.Errorf("Couldn't set ACL because username lookup failed")
-		// TODO: is this, in fact, true?
+		return err
 	}
 
 	// Set the extended attributes; we pipe the ACLs into chmod -E
+	acl := fmt.Sprintf(acluser, u.Username)
 	cmd := exec.Command("/bin/chmod", "-P", "-R", "-E", path)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		glog.Errorf("error opening pipe")
 		return err
 	}
-	fmt.Fprintf(stdin, acluser, "dlg")
+	fmt.Fprintf(stdin, acl)
 	stdin.Close()
-	glog.Infof("setting acl to: %s", fmt.Sprintf(acluser, "dlg"))
+	glog.Infof("setting acl to: %s", acl)
 	out, err = cmd.CombinedOutput()
+
 	if err != nil {
 		glog.Errorf("error setting acl: %s", out)
 		return err
