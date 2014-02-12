@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/base32"
 	"errors"
-	//	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -33,12 +32,12 @@ func createPinnedRamdisk() (disk string, err error) {
 	hdik := exec.Command("/usr/sbin/hdik", "-nomount", ramdisk_uri)
 	out, err := hdik.CombinedOutput()
 	if err != nil {
-		return "", errors.New(fmt.Sprintf("hdik error: %s\n%s", err, out))
+		return "", fmt.Errorf("hdik error: %s\n%s", err, out)
 	}
 	ramdiskre, _ := regexp.Compile("/dev/disk[0-9]+")
 	ramdisk := ramdiskre.Find(out)
 	if ramdisk == nil {
-		return "", errors.New(fmt.Sprintf("hdik didn't return a disk; output:\n %s", out))
+		return "", fmt.Errorf("hdik didn't return a disk; output:\n %s", out)
 	}
 	return string(ramdisk), nil
 }
@@ -59,7 +58,7 @@ func createFs(ramdisk string, uid int) (volname string, err error) {
 	newfs := exec.Command("/sbin/newfs_hfs", "-v", volname, "-U", strconv.Itoa(uid), "-G", "admin", "-M", "700", "-P", ramdisk)
 	out, err := newfs.CombinedOutput()
 	if err != nil {
-		return "", errors.New(fmt.Sprintf("newfs_hfs error: %s", out))
+		return "", fmt.Errorf("newfs_hfs error: %s", out)
 	}
 	return volname, nil
 }
@@ -67,8 +66,6 @@ func createFs(ramdisk string, uid int) (volname string, err error) {
 func main() {
 	// Parse flags for glog
 	//flag.Parse()
-	// We use glog.Errorf and os.Exit to avoid generating tracebacks
-	// that might be useful to an attacker.
 
 	uid := os.Getuid()
 
@@ -91,7 +88,7 @@ func main() {
 		os.Exit(255)
 	}
 
-	// Format it
+	// Create the filesystem
 	volname, err := createFs(ramdisk, uid)
 	if err != nil {
 		glog.Errorf("createFs: %s", err)
@@ -107,7 +104,7 @@ func main() {
 	}
 	err = os.Lchown(mountpoint, uid, -1)
 	if err != nil {
-		glog.Fatalf("couldn't chown directory: %s", err)
+		glog.Errorf("couldn't chown directory: %s", err)
 		os.Exit(255)
 	}
 	// Mount the new volume on the mountpoint
